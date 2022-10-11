@@ -1,0 +1,401 @@
+---
+title: "chronic pain, depressio, inflamamtion MVMR"
+output: html_document
+date: '2022-07-18'
+---
+
+## Load in packages
+```{r setup, include=FALSE}
+library(tidyverse)
+library(data.table)
+library(ivpack)
+library(meta)
+library(devtools)
+library(pacman)
+library(TwoSampleMR)
+library(MRInstruments)
+library(ieugwasr)
+library(mr.raps)
+library(MRPRESSO)
+library(dplyr)
+```
+
+## Reformat GWAS summary statistcis for MVMR
+
+```{r Reformat GWAS sumstats}
+## Load in summary statistics of glycA, MCP and MDD
+
+
+GWAS_MDD_rm_UKB <- read.table("/Users/hannahcasey/Desktop/PhD/resources/summary_statistics/processed_data/MDD_no_UKB.txt", header = TRUE)
+
+GWAS_MDD_rm_UKB_23andMe <- read.table("/Users/hannahcasey/Desktop/PhD/resources/summary_statistics/processed_data/MDD_no_UKB_23andME.txt", header = TRUE)
+
+GWAS_MCP <- read.table("/Users/hannahcasey/Desktop/PhD/resources/summary_statistics/raw_data/ChronicPain.stats", header = TRUE)
+
+GWAS_MCP_rm_UKB <- read.table("/Users/hannahcasey/Desktop/PhD/projects/UKB_glycA_GWAS/output/GWAS/BOLT/multisite_chronic_pain_no_glycA.stat", header = TRUE)
+
+GWAS_glycA <- read.table("/Users/hannahcasey/Desktop/PhD/projects/UKB_glycA_GWAS/output/GWAS/BOLT/glycA.stat", header = TRUE)
+
+GWAS_CRP <- read.table("/Users/hannahcasey/Desktop/PhD/resources/summary_statistics/processed_data/CRP.txt", header = TRUE)
+
+
+## Give consistent column naems
+GWAS_MDD_rm_UKB <- GWAS_MDD_rm_UKB %>%
+  select(SNP, A1, A2, FRQ_A_116209, beta, beta_SE, P) %>%
+  rename(A1FREQ = FRQ_A_116209,
+         BETA = beta,
+         SE = beta_SE)
+
+
+GWAS_MDD_rm_UKB_23andMe <- GWAS_MDD_rm_UKB_23andMe %>%
+  select(SNP, A1, A2, FRQ_A_45396, beta, beta_SE, P) %>%
+  rename(A1FREQ = FRQ_A_45396,
+         BETA = beta,
+         SE = beta_SE)
+
+GWAS_MCP <- GWAS_MCP %>%
+  select(SNP, ALLELE1, ALLELE0, A1FREQ, BETA, SE, P) %>%
+  rename(A1 = ALLELE1,
+         A2 = ALLELE0)
+
+GWAS_MCP_rm_UKB <- GWAS_MCP_rm_UKB %>%
+  select(SNP, ALLELE1, ALLELE0, A1FREQ, BETA, SE, P_BOLT_LMM_INF) %>%
+  rename(A1 = ALLELE1,
+         A2 = ALLELE0,
+         P = P_BOLT_LMM_INF)
+
+GWAS_glycA <- GWAS_glycA %>%
+  select(SNP, ALLELE1, ALLELE0, A1FREQ, BETA, SE, P_BOLT_LMM_INF) %>%
+  rename(A1 = ALLELE1,
+         A2 = ALLELE0,
+         P = P_BOLT_LMM_INF)
+
+GWAS_CRP <- GWAS_CRP %>%
+  select(rsID, Allele1, Allele2, Effect, StdErr, P) %>%
+  rename(SNP = rsID,
+         A1 = Allele1,
+         A2 = Allele2,
+         SE = StdErr,
+         BETA = Effect)
+
+## Add phenotype column tp reformatted GWAS
+GWAS_MDD_rm_UKB$Phenotype <- "MDD"
+GWAS_MDD_rm_UKB_23andMe$Phenotype <- "MDD"
+GWAS_CRP$Phenotype <- "CRP"
+GWAS_glycA$Phenotype <- "glycA"
+GWAS_MCP$Phenotype <- "MCP"
+GWAS_MCP_rm_UKB$Phenotype <- "MCP"
+
+
+## Save formatted summary statistics
+
+write.table(GWAS_MDD_rm_UKB, "/Users/hannahcasey/Desktop/PhD/resources/summary_statistics/processed_data/MVMR/GWAS_MDD_rm_UKB.txt", quote = FALSE, row.names = FALSE)
+
+write.table(GWAS_MDD_rm_UKB_23andMe, "/Users/hannahcasey/Desktop/PhD/resources/summary_statistics/processed_data/MVMR/GWAS_MDD_rm_UKB_23andMe.txt", quote = FALSE, row.names = FALSE)
+
+write.table(GWAS_MCP, "/Users/hannahcasey/Desktop/PhD/resources/summary_statistics/processed_data/MVMR/GWAS_MCP.txt", quote = FALSE, row.names = FALSE)
+
+write.table(GWAS_MCP_rm_UKB, "/Users/hannahcasey/Desktop/PhD/resources/summary_statistics/processed_data/MVMR/GWAS_MCP_rm_UKB.txt", quote = FALSE, row.names = FALSE)
+
+write.table(GWAS_glycA, "/Users/hannahcasey/Desktop/PhD/resources/summary_statistics/processed_data/MVMR/GWAS_glycA.txt", quote = FALSE, row.names = FALSE)
+
+write.table(GWAS_CRP, "/Users/hannahcasey/Desktop/PhD/resources/summary_statistics/processed_data/MVMR/GWAS_CRP.txt", quote = FALSE, row.names = FALSE)
+
+```
+
+## Load in exposure and outcome data
+
+```{r Load in exposre data}
+
+## Define phenotype pairs to be used as exposures in MVMR
+
+## MDD + GlycA -> MCP
+## MCP + GlycA -> MDD
+## MCP + MDD -> glycA
+
+## MDD +  CRP -> MCP
+## MCP +  CRP -> MDD
+## MCP + MDD ->  CRP
+
+
+## Dashes "-" used so phwnotypes can be seperated later
+exposure_outcome_phenotypes <- c("MDD_rm_UKB-glycA-MCP_rm_UKB", "MCP_rm_UKB-glycA-MDD_rm_UKB", "MDD_rm_UKB-MCP_rm_UKB-glycA", "MDD_rm_UKB_23andMe-CRP-MCP", "MCP-CRP-MDD_rm_UKB_23andMe", "MDD_rm_UKB_23andMe-MCP-CRP")
+
+
+for (phenotypes in exposure_outcome_phenotypes){
+  
+  ## Get exposure data
+  assign(paste0("MVMR_", word(phenotypes, 1, sep = "-"), "_", word(phenotypes, 2, sep = "-"), "_exp"), mv_extract_exposures_local(
+  c(paste0("/Users/hannahcasey/Desktop/PhD/resources/summary_statistics/processed_data/MVMR/GWAS_", word(phenotypes, 1, sep = "-"), ".txt"),
+    paste0("/Users/hannahcasey/Desktop/PhD/resources/summary_statistics/processed_data/MVMR/GWAS_", word(phenotypes, 2, sep = "-"), ".txt")),
+  sep = " ",
+  phenotype_col = "Phenotype",
+  snp_col = "SNP",
+  beta_col = "BETA",
+  se_col = "SE",
+  effect_allele_col = "A1",
+  other_allele_col = "A2",
+  pval_col = "P",
+  min_pval = 1e-200,
+  log_pval = FALSE,
+  pval_threshold = 5e-05,
+  clump_r2 = 0.001,
+  clump_kb = 10000,
+  harmonise_strictness = 2
+))
+
+  # Printing number of IVs for exposure
+  print(paste0("Number of IVs: ", as.character(length(get(paste0("MVMR_", word(phenotypes, 1, sep = "-"), "_", word(phenotypes, 2, sep = "-"), "_exp"))$SNP)/2)))
+
+  
+  # Extracting instruments from outcome GWAS
+  assign(paste0("MVMR_", word(phenotypes, 3, sep = "-"), "_out"), read_outcome_data(
+  filename = paste0("/Users/hannahcasey/Desktop/PhD/resources/summary_statistics/processed_data/MVMR/GWAS_", word(phenotypes, 3, sep = "-"),".txt"), 
+  snps = get(paste0("MVMR_", word(phenotypes, 1, sep = "-"), "_", word(phenotypes, 2, sep = "-"), "_exp"))$SNP, 
+  sep = " ",
+  phenotype_col = "Phenotype",
+  snp_col = "SNP",
+  beta_col = "BETA",
+  se_col = "SE",
+  effect_allele_col = "A1",
+  other_allele_col = "A2",
+  pval_col = "P",
+  min_pval = 1e-200, 
+  log_pval = FALSE))
+}
+
+## Change exposure ID to descriptive phneotype name
+MVMR_MCP_CRP_exp$id.exposure <- MVMR_MCP_CRP_exp$exposure
+MVMR_MCP_rm_UKB_glycA_exp$id.exposure <- MVMR_MCP_rm_UKB_glycA_exp$exposure
+MVMR_MDD_rm_UKB_23andMe_CRP_exp$id.exposure <- MVMR_MDD_rm_UKB_23andMe_CRP_exp$exposure
+MVMR_MDD_rm_UKB_23andMe_MCP_exp$id.exposure <- MVMR_MDD_rm_UKB_23andMe_MCP_exp$exposure
+MVMR_MDD_rm_UKB_glycA_exp$id.exposure <- MVMR_MDD_rm_UKB_glycA_exp$exposure
+MVMR_MDD_rm_UKB_MCP_rm_UKB_exp$id.exposure <- MVMR_MDD_rm_UKB_MCP_rm_UKB_exp$exposure
+```
+
+## Harmonising exposure and outcome datasets and carry out MVMR analysis
+
+```{r Harmonize data + MVMR}
+
+for (phenotypes in exposure_outcome_phenotypes){
+  
+  library(TwoSampleMR)
+  
+  ## Harmonize data
+  assign("dat", mv_harmonise_data(
+  exposure_dat = get(paste0("MVMR_",word(phenotypes, 1, sep = "-"), "_", word(phenotypes, 2, sep = "-"), "_exp")), 
+  outcome_dat = get(paste0("MVMR_", word(phenotypes, 3, sep = "-"), "_out")), 
+  harmonise_strictness = 2
+))
+
+
+# Creating a dataframe with data for multivariable MR
+mvmr_dat <- data.frame(
+  "rsid" = rownames(dat[["exposure_beta"]]),
+  "col1" = (dat[["exposure_beta"]][ , word(word(phenotypes, 1, sep = "-"),1,sep = "_")]),
+  "col2" = (dat[["exposure_pval"]][ , word(word(phenotypes, 1, sep = "-"),1,sep = "_")]), 
+  "col3" = dat[["exposure_se"]][ , word(word(phenotypes, 1, sep = "-"),1,sep = "_")], 
+  "col4" = dat[["exposure_beta"]][ , word(word(phenotypes, 2, sep = "-"),1,sep = "_")],
+  "col5" = dat[["exposure_pval"]][ , word(word(phenotypes, 2, sep = "-"),1,sep = "_")],
+  "col6" = dat[["exposure_se"]][ , word(word(phenotypes, 2, sep = "-"),1,sep = "_")],
+  "col7" = dat[["outcome_beta"]],
+  "col8" = dat[["outcome_se"]],
+  "col9" = dat[["outcome_pval"]]
+)
+
+
+  ## Change column names to be descriptive
+  names(mvmr_dat) <- c("rsid", 
+                       paste0(word(word(phenotypes, 1, sep = "-"), 1, sep = "_"), "_beta"),
+                       paste0(word(word(phenotypes, 1, sep = "-"),1,sep = "_"), "_p"), 
+                       paste0(word(word(phenotypes, 1, sep = "-"),1,sep = "_"), "_se"), 
+                       paste0(word(word(phenotypes, 2, sep = "-"),1,sep = "_"), "_beta"), 
+                       paste0(word(word(phenotypes, 2, sep = "-"),1,sep = "_"), "_p"), 
+                       paste0(word(word(phenotypes, 2, sep = "-"),1,sep = "_"), "_se"),   
+                       paste0(word(word(phenotypes, 3, sep = "-"),1,sep = "_"), "_beta"), 
+                       paste0(word(word(phenotypes, 3, sep = "-"),1,sep = "_"), "_se"), 
+                       paste0(word(word(phenotypes, 3, sep = "-"),1,sep = "_"), "_p"))
+  
+  rownames(mvmr_dat)<- c()
+  
+  #identifier for the genetic variants
+  rs <- mvmr_dat$rsid
+  
+  #summary data with outcome
+  assign(paste0("beta_", word(word(phenotypes, 3, sep = "-"), 1, sep = "_")), mvmr_dat[, paste0(word(word(phenotypes, 3, sep = "-"), 1, sep = "_"), "_beta")])
+  assign(paste0("se_", word(word(phenotypes, 3, sep = "-"), 1, sep = "_")), mvmr_dat[, paste0( word(word(phenotypes, 3, sep = "-"), 1, sep = "_"), "_se")])
+
+    #summary data with exposure
+  assign(paste0("beta_", word(word(phenotypes, 1, sep = "-"), 1, sep = "_")), mvmr_dat[, paste0(word(word(phenotypes, 1, sep = "-"), 1, sep = "_"), "_beta")])
+    assign(paste0("se_", word(word(phenotypes, 1, sep = "-"), 1, sep = "_")), mvmr_dat[, paste0( word(word(phenotypes, 1, sep = "-"), 1, sep = "_"), "_se")])
+    
+  assign(paste0("beta_", word(word(phenotypes, 2, sep = "-"), 1, sep = "_")), mvmr_dat[, paste0(word(word(phenotypes, 2, sep = "-"), 1, sep = "_"), "_beta")])
+    assign(paste0("se_", word(word(phenotypes, 2, sep = "-"), 1, sep = "_")), mvmr_dat[, paste0( word(word(phenotypes, 2, sep = "-"), 1, sep = "_"), "_se")])
+    
+  
+    # Creating an MVMR object
+  p_unload(TwoSampleMR)
+  library(MendelianRandomization)
+  
+  
+  mvmr_obj <- mr_mvinput(bx = cbind(get(paste0("beta_", word(word(phenotypes, 1, sep = "-"), 1, sep = "_"))), get(paste0("beta_", word(word(phenotypes, 2, sep = "-"), 1, sep = "_")))), 
+                       bxse = cbind(get(paste0("se_", word(word(phenotypes, 1, sep = "-"), 1, sep = "_"))), get(paste0("se_", word(word(phenotypes, 2, sep = "-"), 1, sep = "_")))), 
+                       by = get(paste0("beta_", word(word(phenotypes, 3, sep = "-"), 1, sep = "_"))), 
+                       byse = get(paste0("se_", word(word(phenotypes, 3, sep = "-"), 1, sep = "_"))),
+                       exposure = c(word(word(phenotypes, 1, sep = "-"), 1, sep = "_"), word(word(phenotypes, 2, sep = "-"), 1, sep = "_")),
+                       outcome = word(word(phenotypes, 3, sep = "-"), 1, sep = "_"), 
+                       snps = rs
+)
+  
+  
+
+  # Performing a multivariable MR analysis
+    assign(paste0("mr_mvivw_",word(word(phenotypes, 1, sep = "-"), 1, sep = "_") ,"_",word(word(phenotypes, 2, sep = "-"), 1, sep = "_") ,"_to_", word(word(phenotypes, 3, sep = "-"), 1, sep = "_")), mr_mvivw(mvmr_obj))
+    
+    assign(paste0("mr_mvegger_",word(word(phenotypes, 1, sep = "-"), 1, sep = "_") ,"_",word(word(phenotypes, 2, sep = "-"), 1, sep = "_") ,"_to_", word(word(phenotypes, 3, sep = "-"), 1, sep = "_")), mr_mvegger(mvmr_obj))
+
+}
+
+```
+
+
+## Combine all resutls into single dataframe
+
+```{r Combine results}
+
+mr_mvivw_list <- mget(ls(pattern = "mr_mvivw_.*_to"))
+mr_mvegger_list <- mget(ls(pattern = "mr_mvegger_.*_to"))
+
+mr_mvivw_temp <- data.frame(matrix(NA, nrow = 2, ncol = 0))
+mr_mvegger_temp <- data.frame(matrix(NA, nrow = 2, ncol = 0))
+mr_mvegger_intercept_temp <- data.frame(matrix(NA, nrow = 2, ncol = 0))
+
+## Combine MR MVIVW results
+for (i in 1:length(exposure_outcome_phenotypes)){
+  
+  ## Extract relevent results
+  mr_mvivw_temp$exposure[c(1:2)] <- mr_mvivw_list[[i]]@Exposure
+  mr_mvivw_temp$beta[c(1:2)] <- mr_mvivw_list[[i]]@Estimate
+  mr_mvivw_temp$outcome[c(1:2)] <- mr_mvivw_list[[i]]@Outcome
+  mr_mvivw_temp$se[c(1:2)] <- mr_mvivw_list[[i]]@StdError
+  mr_mvivw_temp$CI_lower[c(1:2)] <- mr_mvivw_list[[i]]@CILower
+  mr_mvivw_temp$CI_upper[c(1:2)] <- mr_mvivw_list[[i]]@CIUpper
+  mr_mvivw_temp$p[c(1:2)] <- mr_mvivw_list[[i]]@Pvalue
+  mr_mvivw_temp$nsnps[c(1:2)] <- mr_mvivw_list[[i]]@SNPs
+  mr_mvivw_temp$RSE[c(1:2)] <- mr_mvivw_list[[i]]@RSE
+  
+  ## Add column specifying analysis
+  mr_mvivw_temp$analysis[c(1:2)] <- paste0(mr_mvivw_list[[i]]@Exposure[1], " + ", mr_mvivw_list[[i]]@Exposure[2], " -> " ,mr_mvivw_list[[i]]@Outcome)
+  
+  ## Append all result to single dataframe
+  if (i ==1){
+    mr_mvivw_all <- mr_mvivw_temp
+  }
+  else{
+    mr_mvivw_all <- rbind(mr_mvivw_all, mr_mvivw_temp)
+    
+  }
+}
+
+## Combine MR MVegger results
+for (i in 1:length(exposure_outcome_phenotypes)){
+  
+  ## Extract relevant results
+   mr_mvegger_temp$exposure[c(1:2)] <-  mr_mvegger_list[[i]]@Exposure
+   mr_mvegger_temp$beta[c(1:2)] <-  mr_mvegger_list[[i]]@Estimate
+   mr_mvegger_temp$outcome[c(1:2)] <-  mr_mvegger_list[[i]]@Outcome
+   mr_mvegger_temp$se[c(1:2)] <-  mr_mvegger_list[[i]]@StdError.Est
+   mr_mvegger_temp$CI_lower[c(1:2)] <-  mr_mvegger_list[[i]]@CILower.Est
+   mr_mvegger_temp$CI_upper[c(1:2)] <-  mr_mvegger_list[[i]]@CIUpper.Est
+   mr_mvegger_temp$p[c(1:2)] <-  mr_mvegger_list[[i]]@Pvalue.Est
+   mr_mvegger_temp$nsnps[c(1:2)] <-  mr_mvegger_list[[i]]@SNPs
+   mr_mvegger_temp$RSE[c(1:2)] <-  mr_mvegger_list[[i]]@RSE
+  
+  ## Add column specifying analysis
+   mr_mvegger_temp$analysis[c(1:2)] <- paste0(mr_mvegger_list[[i]]@Exposure[1], " + ", mr_mvegger_list[[i]]@Exposure[2], " -> " ,mr_mvegger_list[[i]]@Outcome)
+  
+  ## Append all result to single dataframe
+  if (i ==1){
+     mr_mvegger_all <-  mr_mvegger_temp
+  }
+  else{
+     mr_mvegger_all <- rbind( mr_mvegger_all,  mr_mvegger_temp)
+    
+  }
+}
+
+
+## Combine MR MVegger intercept results
+for (i in 1:length(exposure_outcome_phenotypes)){
+  
+  ## Extract relevant results
+   mr_mvegger_intercept_temp$beta[1] <-  mr_mvegger_list[[i]]@Intercept
+   mr_mvegger_intercept_temp$se[1] <-  mr_mvegger_list[[i]]@StdError.Int
+   mr_mvegger_intercept_temp$CI_lower[1] <-  mr_mvegger_list[[i]]@CILower.Int
+   mr_mvegger_intercept_temp$CI_upper[1] <-  mr_mvegger_list[[i]]@CIUpper.Int
+   mr_mvegger_intercept_temp$p[1] <-  mr_mvegger_list[[i]]@Pvalue.Int
+   mr_mvegger_intercept_temp$Heter.Stat[1] <-  mr_mvegger_list[[i]]@Heter.Stat[1]
+   mr_mvegger_intercept_temp$Heter.Stat.p[1] <-  mr_mvegger_list[[i]]@Heter.Stat[2]
+
+  
+  ## Add column specifying analysis
+   mr_mvegger_intercept_temp$analysis[c(1:2)] <- paste0(mr_mvegger_list[[i]]@Exposure[1], " + ", mr_mvegger_list[[i]]@Exposure[2], " -> " ,mr_mvegger_list[[i]]@Outcome)
+  
+  ## Append all result to single dataframe
+  if (i ==1){
+     mr_mvegger_intercept_all <-  mr_mvegger_intercept_temp
+  }
+  else{
+     mr_mvegger_intercept_all <- rbind( mr_mvegger_intercept_all,  mr_mvegger_intercept_temp)
+  }
+}
+
+
+
+
+
+```
+
+
+
+```{r Plot resutls}
+
+## Combine MVIVW and MRegger results into single dataframe
+mr_mvivw_all$method <- "MVIVW"
+mr_mvegger_all$method <- "MVEgger"
+
+plot_all <- ggplot() +
+  geom_pointrange(data=mr_mvivw_all, aes(x = exposure,y = beta, ymin = CI_lower, ymax = CI_upper, col = method)) +
+  geom_pointrange(data=mr_mvegger_all, aes(x = exposure,y = beta, ymin = CI_lower, ymax = CI_upper, col = method), position = position_nudge(x = -0.4)) +
+  geom_quadrant_lines(linetype = "dashed") + 
+  scale_y_continuous(limits = symmetric_limits(max(abs(c(mr_mv_all$CI_lower, mr_mv_all$CI_upper))))) +
+  xlab("") + ylab("") +
+  facet_wrap(~analysis,strip.position="top",nrow=9,scales = "free_y") +
+  coord_flip() +
+  scale_color_manual(values=c( "light blue", "orange")) +
+ theme_minimal()
+
+```
+
+## Save all resutls
+
+```{r save all results}
+
+
+write.csv(mr_mvegger_all, "~/Desktop/PhD/projects/CP_MDD_inflammation_MR/output/MVMR/mvegger_all.csv")
+write.csv(mr_mvivw_all, "~/Desktop/PhD/projects/CP_MDD_inflammation_MR/output/MVMR/mvivw_all.csv")
+write.csv(mr_mvegger_intercept_all, "~/Desktop/PhD/projects/CP_MDD_inflammation_MR/output/MVMR/mvegger_intercept_all.csv")
+
+jpeg(file = "~/Desktop/PhD/projects/CP_MDD_inflammation_MR/output/MVMR/all_results.jpeg", width=200, height=150, units = "mm",res = 500)
+print(plot_all)
+dev.off()
+
+
+
+
+```
+
+
+
+
+

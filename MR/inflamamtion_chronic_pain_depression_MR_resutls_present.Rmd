@@ -1,0 +1,213 @@
+---
+title: "Inflammation in chronic pain and depression MR results"
+output: html_document
+date: '2022-07-20'
+---
+
+```{r setup, include=FALSE}
+library(ggplot2)
+library(patchwork)
+library(ggpmisc)
+library(stringr)
+```
+
+```{r laod and format results, include=FALSE }
+
+## Load in MR results
+MR_res_olink <- read.csv("~/Desktop/PhD/projects/CP_MDD_inflammation_MR/output/two_sample/olink_CVD/MR_inflam_results_beta_df.csv")
+
+MR_res_CRP_glycA <- read.csv("~/Desktop/PhD/projects/CP_MDD_inflammation_MR/output/two_sample/CRP_glycA/MR_CRP_glycA_results_beta_df.csv")
+
+## Load in MR egger intercept information
+olink_intercept <- read.csv("~/Desktop/PhD/projects/CP_MDD_inflammation_MR/output/two_sample/olink_CVD/MR_inflam_results_pleiotropy_df.csv")
+
+CRP_glycA_intercept <- read.csv("~/Desktop/PhD/projects/CP_MDD_inflammation_MR/output/two_sample/CRP_glycA/MR_CRP_glycA_results_pleiotropy_df.csv")
+
+## Combine results
+MR_res <- rbind(MR_res_CRP_glycA[-14], MR_res_olink)
+MR_intercept <- rbind(olink_intercept, CRP_glycA_intercept)
+
+## Remove results with evidence of pleotropy
+MR_analysis_pleiotropy <-  MR_intercept$analysis[MR_intercept$pval < 0.05]
+
+MR_res <- MR_res[!MR_res$analysis %in% MR_analysis_pleiotropy,]
+
+MR_res <- na.omit(MR_res)
+
+## change "TNFSFR5" to "sCD40"
+MR_res$analysis <- gsub("TNFRSF5", "sCD40", MR_res$analysis)
+
+## remove resutls where analysis had less than 3 IVs
+MR_res <- MR_res[MR_res$nsnp > 3,]
+```
+
+
+Adjust p-values:
+
+FDR correction
+
+n = number of comparisons in total made
+
+Each MR method corrected for seperately as corrected p-values are based on ranking.
+
+
+```{r adjust p-values,  include=FALSE}
+p.adjust.new <- function (p, method = p.adjust.methods, n = length(p)) 
+{
+    method <- match.arg(method)
+    if (method == "fdr") 
+        method <- "BH"
+    nm <- names(p)
+    p <- as.numeric(p)
+    p0 <- setNames(p, nm)
+    if (all(nna <- !is.na(p))) 
+        nna <- TRUE
+    else p <- p[nna]
+    lp <- length(p)
+    #stopifnot(n >= lp)
+    if (n <= 1) 
+        return(p0)
+    if (n == 2 && method == "hommel") 
+        method <- "hochberg"
+    p0[nna] <- switch(method, bonferroni = pmin(1, n * p), holm = {
+        i <- seq_len(lp)
+        o <- order(p)
+        ro <- order(o)
+        pmin(1, cummax((n + 1L - i) * p[o]))[ro]
+    }, hommel = {
+        if (n > lp) p <- c(p, rep.int(1, n - lp))
+        i <- seq_len(n)
+        o <- order(p)
+        p <- p[o]
+        ro <- order(o)
+        q <- pa <- rep.int(min(n * p/i), n)
+        for (j in (n - 1L):2L) {
+            ij <- seq_len(n - j + 1L)
+            i2 <- (n - j + 2L):n
+            q1 <- min(j * p[i2]/(2L:j))
+            q[ij] <- pmin(j * p[ij], q1)
+            q[i2] <- q[n - j + 1L]
+            pa <- pmax(pa, q)
+        }
+        pmax(pa, p)[if (lp < n) ro[1L:lp] else ro]
+    }, hochberg = {
+        i <- lp:1L
+        o <- order(p, decreasing = TRUE)
+        ro <- order(o)
+        pmin(1, cummin((n + 1L - i) * p[o]))[ro]
+    }, BH = {
+        i <- lp:1L
+        o <- order(p, decreasing = TRUE)
+        ro <- order(o)
+        pmin(1, cummin(n/i * p[o]))[ro]
+    }, BY = {
+        i <- lp:1L
+        o <- order(p, decreasing = TRUE)
+        ro <- order(o)
+        q <- sum(1/(1L:n))
+        pmin(1, cummin(q * n/i * p[o]))[ro]
+    }, none = p)
+    p0
+}
+
+
+MR_res$p.adjust <- 0
+MR_res[MR_res$method == "Inverse variance weighted", "p.adjust"] <- p.adjust.new(MR_res[MR_res$method == "Inverse variance weighted", "pval"], n = (nrow(MR_res)/4), method = "fdr")
+
+MR_res[MR_res$method == "Simple median", "p.adjust"] <- p.adjust.new(MR_res[MR_res$method == "Simple median", "pval"], n = (nrow(MR_res)/4), method = "fdr")
+
+MR_res[MR_res$method %in% c("MR Egger", "MR Egger (Simex Correction)"), "p.adjust"] <- p.adjust.new(MR_res[MR_res$method %in% c("MR Egger", "MR Egger (Simex Correction)"), "pval"], n = (nrow(MR_res)/4), method = "fdr")
+
+MR_res[MR_res$method == "Weighted median", "p.adjust"] <- p.adjust.new(MR_res[MR_res$method == "Weighted median", "pval"], n = (nrow(MR_res)/4), method = "fdr")
+
+
+# Include yes/no column to determine shape based on p-value
+MR_res$Significance <- 0
+MR_res[MR_res$pval < 0.05, "Significance"] <- "Nominally Significant"
+MR_res[MR_res$pval > 0.05, "Significance"] <- "Not Significant"
+MR_res[MR_res$p.adjust < 0.05, "Significance"] <- "Statistically Significant"
+  
+
+## Get resutls where both IVW and Simple median were nominally significant
+MR_res_sig_analyses <-  unique(MR_res$analysis[(MR_res$method == "Inverse variance weighted" & MR_res$pval < 0.05)])
+MR_res_sig <- MR_res[MR_res$analysis %in% MR_res_sig_analyses,]
+
+```
+
+#### Results - Inflammation in chronic pain and depression: Mendelian Randomisation {.tabset}
+
+##### Effect size graph - Casual Effect of Inflammatory Phenotypes on MDD - All results with nominal significance
+
+```{r plot results - Inflammatory exposure - MDD, echo=FALSE, fig.height=6}
+
+## Separate df based on outcome for plotting
+MR_res_sig_MDD <- MR_res_sig[grep("MDD$", MR_res_sig$analysis),]
+
+## Remove MDD <-> MCP analysis
+MR_res_sig_MDD <- MR_res_sig_MDD[(!grepl("MCP -> MDD", MR_res_sig_MDD$analysis)),]
+
+## Order results by beta values
+MR_res_sig_MDD$analysis <- reorder(MR_res_sig_MDD$analysis, -MR_res_sig_MDD$b)
+
+plot_MDD <- ggplot(MR_res_sig_MDD, aes(x = method,y = b, shape = Significance)) +
+  geom_pointrange(data=MR_res_sig_MDD, aes(x = method,y = b, ymin = Lower, ymax = Upper, col = method)) +
+  geom_point(size=2, aes(colour = factor(method), shape = Significance)) +
+  scale_shape_manual(values = c(`Nominally Significant` = 17,`Not Significant`= 16,`Statistically Significant` = 15)) +
+  scale_y_continuous(limits = symmetric_limits(max(abs(c(MR_res_sig_MDD$Upper, MR_res_sig_MDD$Lower))))) +
+  xlab("") + ylab("") +
+  facet_wrap(~analysis,strip.position="top",nrow=86,scales = "free_y") +
+  coord_flip() +
+  scale_color_manual(values=c("cyan4", "darkgoldenrod1", "darkorange2", "chartreuse4", "darkslateblue")) +
+ theme_minimal() + 
+  theme(axis.text.y = element_blank()) + 
+  guides(col=guide_legend(title="Method"))
+  
+
+plot_MDD
+
+```
+
+##### Effect size graph - Casual Effect of Inflammatory Phenotypes on MCP - All results with nominal significance
+
+```{r plot results - Inflammatory exposure - MCP, echo=FALSE, fig.height=10}
+
+## Separate df based on outcome for plotting
+MR_res_sig_MCP <- MR_res_sig[grep("MCP$", MR_res_sig$analysis),]
+
+## Remove MCP <-> MCP analysis
+MR_res_sig_MCP <- MR_res_sig_MCP[(!grepl("MDD -> MCP", MR_res_sig_MCP$analysis)),]
+
+## Order results by beta values
+MR_res_sig_MCP$analysis <- reorder(MR_res_sig_MCP$analysis, -MR_res_sig_MCP$b)
+
+plot_MCP <- ggplot(MR_res_sig_MCP, aes(x = method,y = b, shape = Significance)) +
+  geom_pointrange(data=MR_res_sig_MCP, aes(x = method,y = b, ymin = Lower, ymax = Upper, col = method)) +
+  geom_point(size=2, aes(colour = factor(method), shape = `Significance`)) +
+  scale_shape_manual(values = c(`Nominally Significant` = 17,`Not Significant`= 16,`Statistically Significant` = 15)) +
+  scale_y_continuous(limits = symmetric_limits(max(abs(c(MR_res_sig_MCP$Upper, MR_res_sig_MCP$Lower))))) +
+  xlab("") + ylab("") +
+  facet_wrap(~analysis,strip.position="top",nrow=86,scales = "free_y") +
+  coord_flip() +
+  scale_color_manual(values=c("cyan4", "darkgoldenrod1", "darkorange2", "chartreuse4", "darkslateblue")) +
+ theme_minimal() + 
+  theme(axis.text.y = element_blank()) + 
+  guides(col=guide_legend(title="Method"))
+  
+
+plot_MCP
+```
+
+
+```{r Save plots, echo = FALSE}
+
+png("~/Desktop/PhD/projects/CP_MDD_inflammation_MR/output/two_sample/sig_MDD.jpg", res = 200, height = 1200, width = 1200)
+plot_MDD
+dev.off()
+
+png("~/Desktop/PhD/projects/CP_MDD_inflammation_MR/output/two_sample/sig_MCP.jpg", res = 200, height = 2000, width = 1200)
+plot_MCP
+dev.off()
+
+```
+
+

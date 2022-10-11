@@ -1,0 +1,559 @@
+---
+title: "Chronic pain and depression olink CVD panel"
+output: html_document
+date: '2022-07-22'
+---
+
+```{r setup, include=FALSE}
+
+#install.packages("devintools") 
+library(devtools)
+#install_github("MRCIEU/TwoSampleMR")
+library(TwoSampleMR)
+library(dplyr)
+library(MRInstruments)
+#install.packages("SciViews")
+library(SciViews) #for ln() function
+##install_github("qingyuanzhao/mr.raps", force = TRUE)
+library(mr.raps) # for MR analysis with weak instruments
+library(ggplot2) 
+library(simex)
+#install_github("firasfneish/CI-package")
+library(CI)
+library(stringr)
+library(patchwork)
+library(ggpmisc) #make plots symetric on the x axis
+library(svMisc) #progress bar
+library(readxl)
+#install.packages("LDlinkR")
+library(LDlinkR)
+#install.packages("stringi")
+library(stringi)
+library(stringr)
+```
+
+## Load in exposure data and refine to independednt associated SNPs
+
+```{r Load in exposure data, echo = F}
+
+inflam_sumstats <- list.files("~/Desktop/PhD/resources/summary_statistics/raw_data/olink_CVD/")
+inflam_sumstats <- inflam_sumstats[grepl(".txt", inflam_sumstats)]
+inflam_sumstats <- inflam_sumstats[!grepl("sumstat_index", inflam_sumstats)]
+inflam_sumstats <- gsub(".txt", "", inflam_sumstats)
+
+for (i in inflam_sumstats[83]){
+  
+  assign(paste0(i, "_exp_dat"), read_exposure_data(
+  filename = paste0("/Users/hannahcasey/Desktop/PhD/resources/summary_statistics/raw_data/olink_CVD/",i,".txt"),
+  snp_col = "hm_rsid",
+  beta_col = "hm_beta",
+  se_col = "standard_error",
+  effect_allele_col = "hm_effect_allele",
+  other_allele_col = "hm_other_allele",
+  eaf_col = "hm_effect_allele_frequency",
+  pval_col = "p_value"
+))
+  
+  ## Get associated SNPs
+  assign(paste0(i, "_exp_dat"), get(paste0(i, "_exp_dat"))[get(paste0(i, "_exp_dat"))$pval.exposure < 5*10^-8,])
+
+  ## Prune the set of SNPs for LD
+  try(assign(paste0(i, "_exp_dat"), clump_data(get(paste0(paste0(i, "_exp_dat"))), clump_r2 = 0.001)))
+}
+
+
+## MCP
+MCP_dat_full <- read_exposure_data(
+  filename = "/Users/hannahcasey/Desktop/PhD/resources/summary_statistics/raw_data/ChronicPain.stats",
+  sep = "\t",
+  snp_col = "SNP",
+  beta_col = "BETA",
+  se_col = "SE",
+  effect_allele_col = "ALLELE1",
+  other_allele_col = "ALLELE0",
+  eaf_col = "A1FREQ",
+  pval_col = "P"
+)
+
+## MDD
+MDD_dat_full <- read_exposure_data(
+  filename = "~/Desktop/PhD/resources/summary_statistics/processed_data/MDD.txt",
+snp_col = "ID",
+  se_col = "SE",
+  effect_allele_col = "A1",
+  other_allele_col = "A2",
+  eaf_col = "freq",
+  pval_col = "PVAL",
+  beta_col = "BETA"
+)
+
+## Limit to highly associated SNPs
+MDD_exp_dat <- MDD_dat_full[MDD_dat_full$pval.exposure < 5*10^-8,]
+MCP_exp_dat <- MCP_dat_full[MCP_dat_full$pval.exposure < 5*10^-8,]
+
+## Prune the set of SNPs for LD
+MDD_exp_dat <- clump_data(MDD_exp_dat, clump_r2 = 0.001)
+MCP_exp_dat <- clump_data(MCP_exp_dat, clump_r2 = 0.001)
+
+```
+
+## Remove inflammatory markers with less than 3 GWS hits (required for MR analysis)
+
+```{r Remove small inflam GWAS}
+
+## get all exposure data
+exposure_df <- ls(pattern = "_exp_")
+exposure_df <- exposure_df[!grepl("MCP|MDD",exposure_df)]
+
+## If there are less than 3 rows, delete df so it will not be analysed
+for (i in 1:length(exposure_df)){
+  if (nrow(get(exposure_df[i])) < 3){
+    rm(list = exposure_df[i])
+  }
+}
+
+## get list of GWAS with 3 or more hits
+remaining_GWAS <- ls(pattern = "exp_dat")
+remaining_GWAS <- gsub("_exp_dat", "", remaining_GWAS)
+
+## save list
+write.table(remaining_GWAS, "~/Desktop/PhD/projects/CP_MDD_inflammation_MR/resources/valid_olink_GWAS_list.txt", quote = F, row.names = F, col.names = F)
+  
+```
+
+## Get LD proxies for GWS SNPs if they are not present in MDD and MCP GWAS
+
+```{r get LD proxy}
+
+## Get inflammatory markers with sufficient number of SNPs
+exposure_df <- ls(pattern = "_exp_")
+exposure_df <- exposure_df[!grepl("MCP|MDD",exposure_df)]
+inflam_sumstats <- word(exposure_df,1, sep = "_")
+inflam_sumstats <- inflam_sumstats[!grepl("MDD|MCP", inflam_sumstats)]
+
+for (inflam in inflam_sumstats){
+  
+  ## Make new exposure datasets 
+  assign(paste0(inflam, "_exp_dat_MDD"), get(paste0(inflam, "_exp_dat")))
+  assign(paste0(inflam, "_exp_dat_MCP"), get(paste0(inflam, "_exp_dat")))
+  
+  ## If any SNP present in inflam exposure data is not present in MDD/MCP sumstats, replace with LD proxy
+    if(any(!get(paste0(inflam, "_exp_dat"))$SNP %in% MCP_dat_full$SNP)){
+    
+    for(snp_loc in which(!get(paste0(inflam, "_exp_dat"))$SNP %in% MCP_dat_full$SNP)){
+      
+      ## Overwrite "LD_SNPs"
+      LD_SNPs <- "error flag"
+      
+      try(LD_SNPs <- LDproxy(snp = get(paste0(inflam, "_exp_dat_MCP"))$SNP[snp_loc], 
+      pop = "EUR", 
+      token = "448bee827178")$RS_Number)
+      
+      ## If "LD_SNPs" had not changed, SNP not present in LD database - do not replace
+      ## if it has changes replace with proxy in sumstats
+      
+      if (any(LD_SNPs != "error flag")){
+        
+        ## Get most correlated SNP that is also in sumstats
+      proxy_SNP <- LD_SNPs[LD_SNPs %in% MCP_dat_full$SNP][1]
+      
+      ## Replace name  of SNP with that of proxy SNP
+      new_line <- get(paste0(inflam, "_exp_dat_MCP"))[snp_loc,]
+      new_line$SNP <- proxy_SNP
+      
+      ## add to exposure data
+      new_dat <- rbind(get(paste0(inflam, "_exp_dat_MCP"))[-snp_loc, ], new_line)
+      
+      ## Replace SNP not in MCP sumstats with prxy that is
+      assign(paste0(inflam, "_exp_dat_MCP"), new_dat)
+        } else{}
+      
+    }
+  }
+  
+    if(any(!get(paste0(inflam, "_exp_dat"))$SNP %in% MDD_dat_full$SNP)){
+    
+    for(snp_loc in which(!get(paste0(inflam, "_exp_dat"))$SNP %in% MDD_dat_full$SNP)){
+      
+      ## Overwrite "LD_SNPs"
+      LD_SNPs <- "error flag"
+      
+      try(LD_SNPs <- LDproxy(snp = get(paste0(inflam, "_exp_dat_MDD"))$SNP[snp_loc], 
+      pop = "EUR", 
+      token = "448bee827178")$RS_Number)
+      
+      ## If "LD_SNPs" had not changed, SNP not present in LD database - do not replace
+      ## if it has changes replace with proxy in sumstats
+      
+      if (any(LD_SNPs != "error flag")){
+        
+        ## Get most correlated SNP that is also in sumstats
+      proxy_SNP <- LD_SNPs[LD_SNPs %in% MDD_dat_full$SNP][1]
+      
+      ## Replace name  of SNP with that of proxy SNP
+      new_line <- get(paste0(inflam, "_exp_dat_MDD"))[snp_loc,]
+      new_line$SNP <- proxy_SNP
+      
+      ## add to exposure data
+      new_dat <- rbind(get(paste0(inflam, "_exp_dat_MDD"))[-snp_loc, ], new_line)
+      
+      ## Replace SNP not in MDD sumstats with prxy that is
+      assign(paste0(inflam, "_exp_dat_MDD"), new_dat)
+        } else{}
+      
+    }
+  }
+}
+
+
+```
+
+## Load in outcome data
+
+```{r Load in outcome data, echo=FALSE}
+
+for (i in inflam_sumstats){
+  
+  assign(paste0("MDD_",i,"_out_dat"), read_outcome_data(
+  snps = get(paste0(i, "_exp_dat_MDD"))$SNP,
+  filename = "~/Desktop/PhD/resources/summary_statistics/processed_data/MDD.txt",
+snp_col = "ID",
+  se_col = "SE",
+  effect_allele_col = "A1",
+  other_allele_col = "A2",
+  eaf_col = "freq",
+  pval_col = "PVAL",
+  beta_col = "BETA"
+))
+  
+  assign(paste0("MCP_",i,"_out_dat"), read_outcome_data(
+  snps = get(paste0(i, "_exp_dat_MCP"))$SNP,
+  sep = "\t",
+  filename = "/Users/hannahcasey/Desktop/PhD/resources/summary_statistics/raw_data/ChronicPain.stats",
+  snp_col = "SNP",
+  se_col = "SE",
+  effect_allele_col = "ALLELE1",
+  other_allele_col = "ALLELE0",
+  eaf_col = "A1FREQ",
+  pval_col = "P",
+  beta_col = "BETA"
+))
+  
+#   assign(paste0(i,"_MDD_out_dat"), read_outcome_data(
+#   snps = MDD_exp_dat$SNP,
+#   filename = paste0("/Users/hannahcasey/Desktop/PhD/resources/summary_statistics/raw_data/olink_CVD/",i,".txt"),
+#   snp_col = "hm_rsid",
+#   beta_col = "hm_beta",
+#   se_col = "standard_error",
+#   effect_allele_col = "hm_effect_allele",
+#   other_allele_col = "hm_other_allele",
+#   eaf_col = "hm_effect_allele_frequency",
+#   pval_col = "p_value"
+# ))
+#   
+#   assign(paste0(i,"_MCP_out_dat"), read_outcome_data(
+#   snps = MCP_exp_dat$SNP,
+#   filename = paste0("/Users/hannahcasey/Desktop/PhD/resources/summary_statistics/raw_data/olink_CVD/",i,".txt"),
+#   snp_col = "hm_rsid",
+#   beta_col = "hm_beta",
+#   se_col = "standard_error",
+#   effect_allele_col = "hm_effect_allele",
+#   other_allele_col = "hm_other_allele",
+#   eaf_col = "hm_effect_allele_frequency",
+#   pval_col = "p_value"
+# ))
+}
+
+
+```
+
+## Harmonise data and perform MR analysis
+
+```{r Harmonise data and perform MR analysis}
+
+for (inflam in inflam_sumstats){
+  
+  for (disorder in c("MDD", "MCP")){
+    
+    ## Harmonise data
+    assign(paste0("dat_", inflam, "_", disorder), harmonise_data(
+    exposure_dat = get(paste0(inflam, "_exp_dat_", disorder)), 
+    outcome_dat = get(paste0(disorder, "_", inflam, "_out_dat")),
+    action = 2))
+    
+    # assign(paste0("dat_", disorder, "_", inflam), harmonise_data(
+    # exposure_dat = get(paste0(disorder, "_exp_dat")), 
+    # outcome_dat = get(paste0(inflam, "_", disorder, "_out_dat")),
+    # action = 2))
+    
+    ## remove dat df if there are less than 3 harmonised SNPs
+    if (sum(get(paste0("dat_", inflam, "_", disorder))["mr_keep"]) < 3){
+    rm(list = paste0("dat_", inflam, "_", disorder))
+  }else{
+      ## Perform summary MR analysis
+      assign(paste0("res_", inflam, "_", disorder),mr(get(paste0("dat_", inflam, "_", disorder)), method_list=c("mr_ivw", "mr_simple_median", "mr_egger_regression","mr_weighted_median")))
+       
+      assign(paste0("res_", inflam, "_", disorder, "_OR"), generate_odds_ratios(get(paste0("res_", inflam, "_", disorder))))
+      
+      # assign(paste0("res_", disorder, "_", inflam),mr(get(paste0("dat_", disorder, "_", inflam)), method_list=c("mr_ivw", "mr_raps", "mr_egger_regression","mr_weighted_median"), parameters = list(test_dist = "z", nboot = 1000, Cov = 0, penk = 20, phi = 1, alpha = 0.05, Qthresh = 0.05, over.dispersion = FALSE, loss.function = "huber", shrinkage = "FALSE")))
+      #  
+      # assign(paste0("res_", disorder, "_", inflam, "_OR"), generate_odds_ratios(get(paste0("res_", disorder, "_", inflam))))
+      }
+  }
+}
+
+
+```
+
+## Sensitivity analysis
+
+```{r sensitivity analysis}
+
+## get phenotype with MR results
+MR_results <- ls(pattern = "res_")
+MR_results <- gsub("_OR|res_|single_|loo_|", "", MR_results)
+MR_results <- unique(MR_results)
+
+
+for (phenotypes in MR_results){
+  
+  ## Check pleiotropy
+  assign(paste0("mr_pleiotropy_test_", phenotypes), mr_pleiotropy_test(get(paste0("dat_",phenotypes))))
+
+  ## Check pleiotropy
+  assign(paste0("mr_heterogeneity_test_", phenotypes), mr_heterogeneity(get(paste0("dat_",phenotypes))))
+
+  ## Visualise results
+  assign(paste0("scatter_", phenotypes), mr_scatter_plot(get(paste0("res_",phenotypes)), get(paste0("dat_",phenotypes))))
+
+  ## Forest plot
+  assign(paste0("res_single_", phenotypes), mr_singlesnp(get(paste0("dat_", phenotypes)), all_method =c("mr_ivw", "mr_simple_median", "mr_egger_regression","mr_weighted_median")))
+  
+  # ## change beta value of simple MR test for FST -> MDD, same value as one of the IVs and causing issues as factor level is duplicated
+  # if(phenotypes == "FST_MDD"){
+  #   res_single_FST_MDD[res_single_FST_MDD$SNP == "All - Simple median", "b"] <- res_single_FST_MDD[res_single_FST_MDD$SNP == "All - Simple median", "b"] + 0.000000000001
+  # }
+  
+  assign(paste0("forest_", phenotypes), mr_forest_plot(get(paste0("res_single_", phenotypes))))
+
+  ## Leave one out
+  assign(paste0("res_loo_", phenotypes), mr_leaveoneout(get(paste0("dat_", phenotypes))))
+  assign(paste0("leave_one_out_", phenotypes), mr_leaveoneout_plot(get(paste0("res_loo_", phenotypes))))
+
+  ## Assess heterogeneity
+  assign(paste0("funnel_", phenotypes), mr_funnel_plot(get(paste0("res_single_", phenotypes))))
+}
+
+```
+
+
+## Carry out regression dilution I2 GX test
+
+```{r I2 GX test}
+
+## Save F and I2 GX statistics 
+F_I2GX_stats <- data.frame(analysis = c(rep(NA,1)), F = c(rep(NA,1)), I2GX = c(rep(NA,1)))
+
+for (phenotypes in MR_results){
+  
+  #calculate Isq (weighted and unweighted)
+  I2<-c()
+  
+  ##deleting palindromes and removes for I2 STAT
+  dat <- subset(get(paste0("dat_", phenotypes)), subset=!(mr_keep=="FALSE"))
+
+  #Rename required columns
+  dat $BetaXG<-dat $beta.exposure
+  dat $seBetaXG<-dat $se.exposure
+  BetaXG   = dat $BetaXG
+  seBetaXG = dat $seBetaXG 
+  seBetaYG<-dat $se.outcome
+    
+  
+  BXG = abs(BetaXG)         # gene--exposure estimates are positive  
+  
+  # Calculate F statistics
+  # and I-squared statistics
+  # to measure Instrument 
+  # strength for MR-Egger
+  
+  F   = BXG^2/seBetaXG^2
+  mF  = mean(F)
+  ## F = 21
+  Isq_unweighted <- Isq(BXG,seBetaXG) #unweighted
+  Isq_weighted <- Isq((BXG/seBetaYG),(seBetaXG/seBetaYG)) #weighted
+  Isq_unweighted
+  
+  ## Report F and I-squared statistic
+  
+  print(paste0(word(phenotypes, 1, sep = "_"), " -> ", word(phenotypes, 2, sep = "_"), ": F statistic = ", mF))
+  print(paste0(word(phenotypes, 1, sep = "_"), " -> ", word(phenotypes, 2, sep = "_"), ": I-squared statistic = ", Isq_unweighted))  
+  
+  ## Save statistics
+  F_I2GX_stats[which(MR_results == phenotypes), "analysis"] <- paste0(word(phenotypes, 1, sep = "_"), " -> ", word(phenotypes, 2, sep = "_"))
+  F_I2GX_stats[which(MR_results == phenotypes), "F"]  <- mF
+  F_I2GX_stats[which(MR_results == phenotypes), "I2GX"]  <- Isq_unweighted
+}
+
+```
+
+
+## Carry out Simex correction
+
+```{r Simex correction}
+
+## Get phenotype pairs where simex correcion is needed
+phenotypes_simex <- paste0(word(F_I2GX_stats[F_I2GX_stats$I2GX < 0.9, "analysis"], 1, sep = " -> "), "_", word(F_I2GX_stats[F_I2GX_stats$I2GX < 0.9, "analysis"], 2, sep = " -> "))
+
+if (any(phenotypes_simex != "NA_NA")){
+  for (phenotypes in phenotypes_simex){
+    
+    #create empty dataframe to store output
+    simexegger<-c()
+    
+    dat <- get(paste0("dat_", phenotypes))[get(paste0("dat_", phenotypes))$mr_keep == "TRUE",]
+    
+    #run simex 
+    #Rename required columns
+    dat$BetaXG<-dat$beta.exposure
+    dat$seBetaXG<-dat$se.exposure
+    dat$BetaYG<-dat$beta.outcome
+    dat$seBetaYG<-dat$se.outcome
+    BetaXG <- dat$BetaXG
+    BetaYG <- dat$BetaYG
+    seBetaXG <- dat$seBetaXG
+    seBetaYG <- dat$seBetaYG
+    
+    BYG <- BetaYG*sign(BetaXG)# Pre-processing steps to ensure all gene--exposure estimates are positive
+    BXG <- abs(BetaXG)         
+    
+    # MR-Egger regression (weighted) 
+    Fit1 <- lm(BYG ~ BXG,weights=1/seBetaYG^2,x=TRUE,y=TRUE)
+    
+    # MR-Egger regression (unweighted)
+    Fit2 <- lm(BYG~BXG,x=TRUE,y=TRUE) 
+    
+    # Simulation extrapolation 
+    mod.sim1 <- simex(Fit1,B=1000, measurement.error = seBetaXG, SIMEXvariable="BXG",fitting.method ="quad",asymptotic="FALSE") 
+    mod.sim2 <- simex(Fit2,B=1000, measurement.error = seBetaXG, SIMEXvariable="BXG",fitting.method ="quad",asymptotic="FALSE") 
+    mod1<-summary(mod.sim1)
+    mod2<-summary(mod.sim2)
+    
+    #extract results in beta format
+    beta1<-mod1$coefficients$jackknife[2,1]
+    se1<-mod1$coefficients$jackknife[2,2]
+    p1<-mod1$coefficients$jackknife[2,4]
+    
+    #convert to odds ratios for categorical outcomes
+    results1<-cbind("unweighted", beta1, se1, p1)
+    colnames(results1) <- c("exposure", "b", "se", "pval") #following the MRBase naming convention
+    results1<-data.frame(results1)
+    results1$b<-as.numeric(as.character(results1$b))
+    results1$se<-as.numeric(as.character(results1$se))
+    results1$pval<-as.numeric(as.character(results1$pval))
+    
+    assign(paste0("res_", phenotypes, "_simex"), results1)
+    assign(paste0("res_", phenotypes, "_OR_simex"), generate_odds_ratios(results1))
+  }
+  
+  
+  
+  ## Overwrite uncorrected MR estimate with simex estimate in MR analyses with Isq < 0.9
+  for (phenotypes in phenotypes_simex){
+    
+    temp <- get(paste0("res_", phenotypes))
+    temp[temp$method == "MR Egger",][c("method", "exposure", "b", "se", "pval")] <- c("MR Egger (Simex Correction)", get(paste0("res_", phenotypes, "_simex")))
+    assign(paste0("res_", phenotypes), temp)
+    
+    
+      temp <- get(paste0("res_", phenotypes, "_OR"))
+    temp[temp$method == "MR Egger",][c("method", "exposure", "b", "se", "pval")] <- c("MR Egger (Simex Correction)", get(paste0("res_", phenotypes, "_OR_simex")))
+    assign(paste0("res_", phenotypes, "_OR"), temp)
+    
+  }
+}
+
+
+```
+
+
+## Combine all results into single dataframe
+
+```{r Combine all results}
+
+MR_inflam_results_beta <- ls(pattern = "^res_")
+MR_inflam_results_beta <- MR_inflam_results_beta[!grepl("OR|simex|single|loo", MR_inflam_results_beta)]
+MR_inflam_results_OR <- grep("OR", ls(pattern = "^res_"), value = TRUE)
+MR_inflam_results_OR <- MR_inflam_results_OR[!grepl("simex|single|loo", MR_inflam_results_OR)]
+MR_inflam_results_pleiotropy <- ls(pattern = "^mr_pleiotropy")
+
+
+## Make list of dataframes
+MR_inflam_results_beta_list <- mget(MR_inflam_results_beta)
+MR_inflam_results_OR_list <- mget(MR_inflam_results_OR)
+MR_inflam_results_pleiotropy_list <- mget(MR_inflam_results_pleiotropy)
+
+
+## Add descriptive analysis column to each dataframe
+for (i in 1:length(MR_inflam_results_beta_list)) {
+  
+  MR_inflam_results_beta_list[[i]]$analysis <- paste0(word(names(MR_inflam_results_beta_list)[i],2,sep = "_"), " -> ", word(names(MR_inflam_results_beta_list)[i],3,sep = "_"))
+  
+  MR_inflam_results_OR_list[[i]]$analysis <- paste0(word(names(MR_inflam_results_OR_list)[i],2,sep = "_"), " -> ", word(names(MR_inflam_results_OR_list)[i],3,sep = "_"))
+  
+  MR_inflam_results_pleiotropy_list[[i]]$analysis <- paste0(word(names(MR_inflam_results_beta_list)[i],2,sep = "_"), " -> ", word(names(MR_inflam_results_beta_list)[i],3,sep = "_"))
+}
+
+## Combine elements in lists into single dataframe
+MR_inflam_results_beta_df <- do.call("rbind", MR_inflam_results_beta_list)
+MR_inflam_results_OR_df <- do.call("rbind", MR_inflam_results_beta_list)
+MR_inflam_results_pleiotropy_df <- do.call("rbind", MR_inflam_results_pleiotropy_list)
+
+
+## Calculate 95% CI for all results
+MR_inflam_results_beta_df$Upper <- MR_inflam_results_beta_df$b + (1.96 * MR_inflam_results_beta_df$se)
+MR_inflam_results_beta_df$Lower <- MR_inflam_results_beta_df$b - (1.96 * MR_inflam_results_beta_df$se)
+
+MR_inflam_results_OR_df$Upper <- MR_inflam_results_OR_df$b + (1.96 * MR_inflam_results_OR_df$se)
+MR_inflam_results_OR_df$Lower <- MR_inflam_results_OR_df$b - (1.96 * MR_inflam_results_OR_df$se)
+
+```
+
+
+
+## Save results
+
+```{r Save all results}
+
+## Get array of names of all dataframes and plots to save
+dfs<-Filter(function(x) is.data.frame(get(x)) , ls(pattern = "^MR_inflam_results|F_I2GX_stats"))
+
+plots <- Filter(function(x) is.list(get(x)) , ls(pattern = "leave_one_out|forest|scatter|funnel"))
+
+
+## Save all dataframes for resutls and  sensitivity analysis
+for(d in dfs) {
+    write.csv(get(d), paste0("~/Desktop/PhD/projects/CP_MDD_inflammation_MR/output/two_sample/olink_CVD/",d, ".csv"))
+}
+
+
+## Save all plots for resutls and  sensitivity analysis
+for(d in plots){
+
+  png(paste0("~/Desktop/PhD/projects/CP_MDD_inflammation_MR/output/two_sample/olink_CVD/",d, ".jpg"))
+  print(get(d)) 
+  dev.off()
+}
+
+## Save independently associated TNFRSF5, MDD and MCP - for colocaliation
+write.table(TNFRSF5_exp_dat$SNP, "~/Desktop/PhD/projects/CP_MDD_inflammation_MR/resources/TNFRSF5.snplist", quote = FALSE, row.names = FALSE)
+
+write.table(MDD_exp_dat$SNP, "~/Desktop/PhD/projects/CP_MDD_inflammation_MR/resources/MDD.snplist", quote = FALSE, row.names = FALSE)
+
+write.table(MCP_exp_dat$SNP, "~/Desktop/PhD/projects/CP_MDD_inflammation_MR/resources/MCP.snplist", quote = FALSE, row.names = FALSE)
+```
+
+
+
+
+
