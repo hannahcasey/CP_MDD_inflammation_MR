@@ -33,12 +33,14 @@ UKB_CP_MDD_inflam_covariates_temp <- UKB_CP_MDD_inflam_covariates[!is.na(UKB_CP_
 jpeg("~/Desktop/PhD/projects/CP_MDD_inflammation_MR/output/phenotypic/plots/glycA_CP.jpeg")
 
 ## Plot glycA levels in chronic pain status
-ggplot(UKB_CP_MDD_inflam_covariates_temp, aes(x=as.factor(chronic_pain_status), y= glycA_1, group = chronic_pain_status)) + 
+CP_status_glycA <- ggplot(UKB_CP_MDD_inflam_covariates_temp, aes(x=as.factor(chronic_pain_status), y= glycA_1, group = chronic_pain_status)) + 
   geom_boxplot(fill = c("#ffffff", "#2986cc"),alpha = 0.5) +
   theme_classic(base_size = 20) +
   xlab("Chronic Pain Group") + ylab("Serum glycA (mmol/l)") +
   scale_x_discrete(labels=c("No Chronic Pain","Chronic Pain")) +
   ggtitle("")
+
+CP_status_glycA
 
 dev.off()
 
@@ -51,11 +53,14 @@ UKB_CP_MDD_inflam_covariates_temp$chronic_pain_group <- factor(UKB_CP_MDD_inflam
 jpeg("~/Desktop/PhD/projects/CP_MDD_inflammation_MR/output/phenotypic/plots/glycA_CP_sites.jpeg")
 
 ## Plot glycA levels in chronic pain site groups
-ggplot(UKB_CP_MDD_inflam_covariates_temp, aes(x=chronic_pain_group, y= glycA_1, group = chronic_pain_group, fill = chronic_pain_group)) + 
+CP_group_glycA <- ggplot(UKB_CP_MDD_inflam_covariates_temp, aes(x=chronic_pain_group, y= glycA_1, group = chronic_pain_group, fill = chronic_pain_group)) + 
   geom_boxplot(fill = c("#ffffff", "#B6DEFF", "#53B0FC", "#008CFE", "#006DC5"),alpha = 0.5) +
   theme_classic(base_size = 20) +
   labs(title="",
        x ="Chronic Pain Group", y = "Serum glycA (mmol/l)")
+
+CP_group_glycA
+
 dev.off()
 
 
@@ -66,10 +71,13 @@ UKB_CP_MDD_inflam_covariates_temp <- UKB_CP_MDD_inflam_covariates[!is.na(UKB_CP_
 
 jpeg("~/Desktop/PhD/projects/CP_MDD_inflammation_MR/output/phenotypic/plots/glycA_MDD.jpeg")
 
-ggplot(UKB_CP_MDD_inflam_covariates_temp, aes(x=as.factor(recurrent_depression), y= glycA_1, group = recurrent_depression)) + 
+MDD_glycA <- ggplot(UKB_CP_MDD_inflam_covariates_temp, aes(x=as.factor(recurrent_depression), y= glycA_1, group = recurrent_depression)) + 
   geom_boxplot(fill = c("#ffffff", "#FFE503"),alpha = 0.5) +
   theme_classic(base_size = 20)  +
   labs(title = "", x = "Probable Recurrent MDD Status", y = "Serum glycA (mmol/l)")
+
+MDD_glycA
+
 dev.off()
 
 ## `Plot GlycA in chronic pain depression comorbidity
@@ -83,7 +91,7 @@ UKB_CP_MDD_inflam_covariates_temp <- UKB_CP_MDD_inflam_covariates[!is.na(UKB_CP_
 jpeg("~/Desktop/PhD/projects/CP_MDD_inflammation_MR/output/phenotypic/plots/glycA_CPMDD.jpeg")
 
 
-ggplot(data=UKB_CP_MDD_inflam_covariates_temp) +
+CPMDD_glycA <- ggplot(data=UKB_CP_MDD_inflam_covariates_temp) +
   (aes(x=as.factor(CP_MDD_comorbidity_status), y=glycA_1)) +
   geom_boxplot(fill = c("#ffffff", "#FFE503", "#2986cc", "#2ABA00"), alpha = 0.5) +
   theme_classic(base_size = 15) +
@@ -92,6 +100,8 @@ ggplot(data=UKB_CP_MDD_inflam_covariates_temp) +
                             "Probable Recurrent MDD + No Chronic Pain" = "CP-MDD+",
                             "No Probable Recurrent MDD + Chronic Pain" = "CP+MDD-",
                             "Probable Recurrent MDD + Chronic Pain" = "CP+MDD+"))
+
+CPMDD_glycA
 
 dev.off()
 
@@ -113,7 +123,7 @@ UKB_CP_MDD_inflam_covariates_temp$chronic_pain_status <- factor(UKB_CP_MDD_infla
 
 jpeg('~/Desktop/PhD/projects/CP_MDD_inflammation_MR/output/phenotypic/plots/CP_status_glycA_sex_interaction.jpg', width = 700, height = 600)
 
-UKB_CP_MDD_inflam_covariates_temp %>% 
+CP_status_glycA_sex_interaction <- UKB_CP_MDD_inflam_covariates_temp %>% 
   ggplot() +
   aes(x = chronic_pain_status, color = sex, group = sex, y = glycA_1) +
   stat_summary(fun.y = mean, geom = "point") +
@@ -121,9 +131,12 @@ UKB_CP_MDD_inflam_covariates_temp %>%
   theme_classic(base_size = 20) +
   ylab("Serum glycA (log, mmol/l)") + 
   xlab("Chronic Pain Status") +
+  labs(color = "Sex") +
   scale_color_manual(values=c("#BA0000", "#2b83ba")) +
   scale_x_discrete(labels=c("0" = "No Chronic Pain",
                             "1" = "Chronic Pain"))
+
+CP_status_glycA_sex_interaction
 
 dev.off()
 
@@ -143,7 +156,7 @@ UKB_CP_MDD_inflam_covariates_temp$chronic_pain_group <- factor(UKB_CP_MDD_inflam
 
 jpeg('~/Desktop/PhD/projects/CP_MDD_inflammation_MR/output/phenotypic/plots/CP_group_glycA_sex_interaction.jpg', width = 650, height = 400)
 
-UKB_CP_MDD_inflam_covariates_temp%>% 
+CP_group_glycA_sex_interaction <- UKB_CP_MDD_inflam_covariates_temp%>% 
   ggplot() +
   aes(x = chronic_pain_group, color = sex, group = sex, y = glycA_1) +
   stat_summary(fun.y = mean, geom = "point") +
@@ -151,8 +164,10 @@ UKB_CP_MDD_inflam_covariates_temp%>%
   theme_classic(base_size = 20) + 
   ylab("Serum glycA (log, mmol/l)") + 
   xlab("Chronic Pain Group") +
+  labs(color = "Sex") +
   scale_color_manual(values=c("#BA0000", "#2b83ba"))
 
+CP_group_glycA_sex_interaction
 
 dev.off()
 
@@ -165,7 +180,7 @@ UKB_CP_MDD_inflam_covariates_temp$recurrent_depression <- as.factor(UKB_CP_MDD_i
 
 jpeg('~/Desktop/PhD/projects/CP_MDD_inflammation_MR/output/phenotypic/plots/MDD_status_glycA_sex_interaction.jpg', width = 700, height = 600)
 
-UKB_CP_MDD_inflam_covariates_temp %>% 
+MDD_glycA_sex_interaction <- UKB_CP_MDD_inflam_covariates_temp %>% 
   ggplot() +
   aes(x = recurrent_depression, color = sex, group = sex, y = glycA_1) +
   stat_summary(fun.y = mean, geom = "point") +
@@ -173,9 +188,12 @@ UKB_CP_MDD_inflam_covariates_temp %>%
   theme_classic(base_size = 20) +
   ylab("Serum glycA (log, mmol/l)") + 
   xlab("Recurrent MDD Status") +
+  labs(color = "Sex") +
   scale_color_manual(values=c("#BA0000", "#2b83ba"))+
   scale_x_discrete(labels=c("0" = "No recurrent MDD",
                             "1" = "Recurrent MDD"))
+
+MDD_glycA_sex_interaction
 
 dev.off()
 
@@ -193,12 +211,13 @@ UKB_CP_MDD_inflam_covariates_temp$CP_MDD_comorbidity_status <- factor(UKB_CP_MDD
 jpeg('~/Desktop/PhD/projects/CP_MDD_inflammation_MR/output/phenotypic/plots/CPMDD_group_glycA_sex_interaction.jpg', width = 500, height = 400)
 
 
-UKB_CP_MDD_inflam_covariates_temp %>% 
+CPMDD_glycA_sex_interaction <- UKB_CP_MDD_inflam_covariates_temp %>% 
   ggplot() +
   aes(x = CP_MDD_comorbidity_status, color = sex, group = sex, y = glycA_1) +
   stat_summary(fun.y = mean, geom = "point") +
   stat_summary(fun.y = mean, geom = "line") +
   theme_classic(base_size = 13) + 
+  labs(color = "Sex") +
   ylab("Serum glycA (log, mmol/l)") + 
   xlab("Comorbid Chronci Pain and Depression Group")+ 
   scale_color_manual(values=c("#BA0000", "#2b83ba")) +
@@ -206,6 +225,8 @@ UKB_CP_MDD_inflam_covariates_temp %>%
                             "Probable Recurrent MDD + No Chronic Pain" = "CP-MDD+",
                             "No Probable Recurrent MDD + Chronic Pain" = "CP+MDD-",
                             "Probable Recurrent MDD + Chronic Pain" = "CP+MDD+"))
+
+CPMDD_glycA_sex_interaction
 
 dev.off()
 
