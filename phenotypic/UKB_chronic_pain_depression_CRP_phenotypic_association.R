@@ -33,12 +33,13 @@ UKB_CP_MDD_inflam_covariates_temp <- UKB_CP_MDD_inflam_covariates[!is.na(UKB_CP_
 jpeg("~/Desktop/PhD/projects/CP_MDD_inflammation_MR/output/phenotypic/plots/CRP_CP.jpeg")
 
 ## Plot CRP levels in chronic pain status
-ggplot(UKB_CP_MDD_inflam_covariates_temp, aes(x=as.factor(chronic_pain_status), y= CRP_log, group = chronic_pain_status)) + 
+CP_status_CRP <- ggplot(UKB_CP_MDD_inflam_covariates_temp, aes(x=as.factor(chronic_pain_status), y= CRP_log, group = chronic_pain_status)) + 
   geom_boxplot(fill = c("#ffffff", "#2986cc"),alpha = 0.5) +
   theme_classic(base_size = 20) +
   xlab("Chronic Pain Group") + ylab("Serum CRP (log, mg/l)") +
   scale_x_discrete(labels=c("No Chronic Pain","Chronic Pain")) +
   ggtitle("")
+CP_status_CRP
 
 dev.off()
 
@@ -51,11 +52,14 @@ UKB_CP_MDD_inflam_covariates_temp$chronic_pain_group <- factor(UKB_CP_MDD_inflam
 jpeg("~/Desktop/PhD/projects/CP_MDD_inflammation_MR/output/phenotypic/plots/CRP_CP_sites.jpeg")
 
 ## Plot CRP levels in chronic pain site groups
-ggplot(UKB_CP_MDD_inflam_covariates_temp, aes(x=chronic_pain_group, y= CRP_log, group = chronic_pain_group, fill = chronic_pain_group)) + 
+CP_group_CRP <- ggplot(UKB_CP_MDD_inflam_covariates_temp, aes(x=chronic_pain_group, y= CRP_log, group = chronic_pain_group, fill = chronic_pain_group)) + 
   geom_boxplot(fill = c("#ffffff", "#B6DEFF", "#53B0FC", "#008CFE", "#006DC5"),alpha = 0.5) +
   theme_classic(base_size = 20) +
   labs(title="",
        x ="Chronic Pain Group", y = "Serum CRP (log, mg/l)")
+
+CP_group_CRP
+
 dev.off()
 
 
@@ -66,7 +70,7 @@ UKB_CP_MDD_inflam_covariates_temp <- UKB_CP_MDD_inflam_covariates[!is.na(UKB_CP_
 
 jpeg("~/Desktop/PhD/projects/CP_MDD_inflammation_MR/output/phenotypic/plots/CRP_MDD.jpeg")
 
-ggplot(UKB_CP_MDD_inflam_covariates_temp, aes(x=as.factor(recurrent_depression), y= CRP_log, group = recurrent_depression)) + 
+MDD_CRP <- ggplot(UKB_CP_MDD_inflam_covariates_temp, aes(x=as.factor(recurrent_depression), y= CRP_log, group = recurrent_depression)) + 
   geom_boxplot(fill = c("#ffffff", "#FFE503"),alpha = 0.5) +
   theme_classic(base_size = 20)  +
   labs(title = "", x = "Probable Recurrent MDD Status", y = "Serum CRP (log, mg/l)")
@@ -83,7 +87,7 @@ UKB_CP_MDD_inflam_covariates_temp <- UKB_CP_MDD_inflam_covariates[!is.na(UKB_CP_
 jpeg("~/Desktop/PhD/projects/CP_MDD_inflammation_MR/output/phenotypic/plots/CRP_CPMDD.jpeg")
 
 
-ggplot(data=UKB_CP_MDD_inflam_covariates_temp) +
+CPMDD_CRP <- ggplot(data=UKB_CP_MDD_inflam_covariates_temp) +
   (aes(x=as.factor(CP_MDD_comorbidity_status), y=CRP_log)) +
   geom_boxplot(fill = c("#ffffff", "#FFE503", "#2986cc", "#2ABA00"), alpha = 0.5) +
   theme_classic(base_size = 15) +
@@ -92,7 +96,7 @@ ggplot(data=UKB_CP_MDD_inflam_covariates_temp) +
                             "Probable Recurrent MDD + No Chronic Pain" = "CP-MDD+",
                             "No Probable Recurrent MDD + Chronic Pain" = "CP+MDD-",
                             "Probable Recurrent MDD + Chronic Pain" = "CP+MDD+"))
-
+CPMDD_CRP
 dev.off()
 
 
@@ -113,17 +117,20 @@ UKB_CP_MDD_inflam_covariates_temp$chronic_pain_status <- factor(UKB_CP_MDD_infla
 
 jpeg('~/Desktop/PhD/projects/CP_MDD_inflammation_MR/output/phenotypic/plots/CP_status_CRP_sex_interaction.jpg', width = 700, height = 600)
 
-UKB_CP_MDD_inflam_covariates_temp %>% 
+CP_status_CRP_sex_interaction <- UKB_CP_MDD_inflam_covariates_temp %>% 
   ggplot() +
   aes(x = chronic_pain_status, color = sex, group = sex, y = CRP_log) +
   stat_summary(fun.y = mean, geom = "point") +
   stat_summary(fun.y = mean, geom = "line") +
+  stat_summary(fun.data = mean_se,  
+               geom = "errorbar", width=0.2) +
   theme_classic(base_size = 20) +
   ylab("Serum CRP (log, mg/l)") + 
   xlab("Chronic Pain Status") +
   scale_color_manual(values=c("#BA0000", "#2b83ba")) +
   scale_x_discrete(labels=c("0" = "No Chronic Pain",
                             "1" = "Chronic Pain"))
+CP_status_CRP_sex_interaction
 
 dev.off()
 
@@ -143,16 +150,18 @@ UKB_CP_MDD_inflam_covariates_temp$chronic_pain_group <- factor(UKB_CP_MDD_inflam
 
 jpeg('~/Desktop/PhD/projects/CP_MDD_inflammation_MR/output/phenotypic/plots/CP_group_CRP_sex_interaction.jpg', width = 650, height = 400)
 
-UKB_CP_MDD_inflam_covariates_temp%>% 
+CP_group_CRP_sex_interaction <- UKB_CP_MDD_inflam_covariates_temp%>% 
   ggplot() +
   aes(x = chronic_pain_group, color = sex, group = sex, y = CRP_log) +
   stat_summary(fun.y = mean, geom = "point") +
   stat_summary(fun.y = mean, geom = "line") +
+  stat_summary(fun.data = mean_se,  
+               geom = "errorbar", width=0.2) +
   theme_classic(base_size = 20) + 
   ylab("Serum CRP (log, mg/l)") + 
   xlab("Chronic Pain Group") +
   scale_color_manual(values=c("#BA0000", "#2b83ba"))
-
+CP_group_CRP_sex_interaction
 
 dev.off()
 
@@ -163,15 +172,19 @@ UKB_CP_MDD_inflam_covariates_temp <- UKB_CP_MDD_inflam_covariates[!is.na(UKB_CP_
 
 jpeg('~/Desktop/PhD/projects/CP_MDD_inflammation_MR/output/phenotypic/plots/MDD_status_CRP_sex_interaction.jpg', width = 700, height = 600)
 
-UKB_CP_MDD_inflam_covariates_temp %>% 
+MDD_CRP_sex_interaction <- UKB_CP_MDD_inflam_covariates_temp %>% 
   ggplot() +
   aes(x = recurrent_depression, color = sex, group = sex, y = CRP_log) +
   stat_summary(fun.y = mean, geom = "point") +
   stat_summary(fun.y = mean, geom = "line") +
+  stat_summary(fun.data = mean_se,  
+               geom = "errorbar", width=0.2) +
   theme_classic(base_size = 20) +
   ylab("Serum CRP (log, mg/l)") + 
   xlab("Recurrent MDD Status") +
   scale_color_manual(values=c("#BA0000", "#2b83ba"))
+
+MDD_CRP_sex_interaction
 
 dev.off()
 
@@ -189,11 +202,13 @@ UKB_CP_MDD_inflam_covariates_temp$CP_MDD_comorbidity_status <- factor(UKB_CP_MDD
 jpeg('~/Desktop/PhD/projects/CP_MDD_inflammation_MR/output/phenotypic/plots/CPMDD_group_CRP_sex_interaction.jpg', width = 500, height = 400)
 
 
-UKB_CP_MDD_inflam_covariates_temp %>% 
+CPMDD_CRP_sex_interaction <- UKB_CP_MDD_inflam_covariates_temp %>% 
   ggplot() +
   aes(x = CP_MDD_comorbidity_status, color = sex, group = sex, y = CRP_log) +
   stat_summary(fun.y = mean, geom = "point") +
   stat_summary(fun.y = mean, geom = "line") +
+  stat_summary(fun.data = mean_se,  
+               geom = "errorbar", width=0.2) +
   theme_classic(base_size = 13) + 
   ylab("Serum CRP (log, mg/l)") + 
   xlab("Comorbid Chronci Pain and Depression Group")+ 
@@ -202,6 +217,8 @@ UKB_CP_MDD_inflam_covariates_temp %>%
                             "Probable Recurrent MDD + No Chronic Pain" = "CP-MDD+",
                             "No Probable Recurrent MDD + Chronic Pain" = "CP+MDD-",
                             "Probable Recurrent MDD + Chronic Pain" = "CP+MDD+"))
+
+CPMDD_CRP_sex_interaction
 
 dev.off()
 

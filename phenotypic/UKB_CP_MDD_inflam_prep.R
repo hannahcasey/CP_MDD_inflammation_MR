@@ -188,11 +188,6 @@ unique(UKB_CP_MDD_inflam_covariates$smoking_status)
 UKB_CP_MDD_inflam_covariates$smoking_status <- as.factor(UKB_CP_MDD_inflam_covariates$smoking_status)
 
 ## Reformat BMI data
-## <18.5 = 0
-## 18.5 - 24.9 = 1
-## 25 - 29.9 = 2
-## >= 30 = 3
-
 UKB_CP_MDD_inflam_covariates$BMI_cat <- NA
 UKB_CP_MDD_inflam_covariates$BMI_cat[UKB_CP_MDD_inflam_covariates$BMI < 18.5] <- "Underweight"
 UKB_CP_MDD_inflam_covariates$BMI_cat[(UKB_CP_MDD_inflam_covariates$BMI > 18.5 & UKB_CP_MDD_inflam_covariates$BMI < 25)] <- "Normal"

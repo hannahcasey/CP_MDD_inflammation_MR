@@ -7,7 +7,7 @@ library(patchwork)
 ## Run CRP and glycA association scripts to save plots in R environment
 jpeg('~/Desktop/PhD/projects/CP_MDD_inflammation_MR/output/phenotypic/plots/all_associations.jpg', width = 1300, height = 1800)
 
-all_association <- ((CP_status_CRP | CP_status_glycA) / (CP_groups_CRP | CP_group_glycA) / (MDD_CRP | MDD_glycA) / (CPMDD_CRP | CPMDD_glycA)) + 
+all_association <- ((CP_status_CRP | CP_status_glycA) / (CP_group_CRP | CP_group_glycA) / (MDD_CRP | MDD_glycA) / (CPMDD_CRP | CPMDD_glycA)) + 
   plot_annotation(tag_levels = 'A') &
   theme(axis.title = element_text(size = 18))
 all_association

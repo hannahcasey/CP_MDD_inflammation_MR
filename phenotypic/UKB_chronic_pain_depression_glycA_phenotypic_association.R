@@ -128,6 +128,8 @@ CP_status_glycA_sex_interaction <- UKB_CP_MDD_inflam_covariates_temp %>%
   aes(x = chronic_pain_status, color = sex, group = sex, y = glycA_1) +
   stat_summary(fun.y = mean, geom = "point") +
   stat_summary(fun.y = mean, geom = "line") +
+  stat_summary(fun.data = mean_se,  
+               geom = "errorbar", width=0.2) +
   theme_classic(base_size = 20) +
   ylab("Serum glycA (log, mmol/l)") + 
   xlab("Chronic Pain Status") +
@@ -161,6 +163,8 @@ CP_group_glycA_sex_interaction <- UKB_CP_MDD_inflam_covariates_temp%>%
   aes(x = chronic_pain_group, color = sex, group = sex, y = glycA_1) +
   stat_summary(fun.y = mean, geom = "point") +
   stat_summary(fun.y = mean, geom = "line") +
+  stat_summary(fun.data = mean_se,  
+               geom = "errorbar", width=0.2) +
   theme_classic(base_size = 20) + 
   ylab("Serum glycA (log, mmol/l)") + 
   xlab("Chronic Pain Group") +
@@ -185,6 +189,8 @@ MDD_glycA_sex_interaction <- UKB_CP_MDD_inflam_covariates_temp %>%
   aes(x = recurrent_depression, color = sex, group = sex, y = glycA_1) +
   stat_summary(fun.y = mean, geom = "point") +
   stat_summary(fun.y = mean, geom = "line") +
+  stat_summary(fun.data = mean_se,  
+               geom = "errorbar", width=0.2) +
   theme_classic(base_size = 20) +
   ylab("Serum glycA (log, mmol/l)") + 
   xlab("Recurrent MDD Status") +
@@ -197,7 +203,7 @@ MDD_glycA_sex_interaction
 
 dev.off()
 
-## Plot sex interaction on assocation of CP+MDD and glycA
+## Plot sex interaction on association of CP+MDD and glycA
 ## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ## Remove those with no CPMDD status for plotting and store as temporary df
 UKB_CP_MDD_inflam_covariates_temp <- UKB_CP_MDD_inflam_covariates[!is.na(UKB_CP_MDD_inflam_covariates$CP_MDD_comorbidity_status),]
@@ -216,6 +222,8 @@ CPMDD_glycA_sex_interaction <- UKB_CP_MDD_inflam_covariates_temp %>%
   aes(x = CP_MDD_comorbidity_status, color = sex, group = sex, y = glycA_1) +
   stat_summary(fun.y = mean, geom = "point") +
   stat_summary(fun.y = mean, geom = "line") +
+  stat_summary(fun.data = mean_se,  
+               geom = "errorbar", width=0.2) +
   theme_classic(base_size = 13) + 
   labs(color = "Sex") +
   ylab("Serum glycA (log, mmol/l)") + 
@@ -372,5 +380,6 @@ GlycA_results[22:27,5] <- p.adjust(GlycA_results$p[22:27], n = 12, method = "bon
 ## Save results
 ##~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 write.csv(GlycA_results, "~/Desktop/PhD/projects/CP_MDD_inflammation_MR/output/phenotypic/GlycA_results.csv", quote = FALSE, row.names = FALSE)
+
 
 
