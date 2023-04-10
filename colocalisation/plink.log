@@ -1,0 +1,13 @@
+PLINK v1.90b6.26 64-bit (2 Apr 2022)
+Options in effect:
+  --allow-extra-chr
+  --bfile /Users/hannahcasey/Desktop/PhD/resources/LD_reference/all_phase3
+  --keep /Users/hannahcasey/Desktop/PhD/resources/LD_reference/all_phase3_eur.fam
+
+Hostname: Hannahs-MacBook-Pro-10.local
+Working directory: /Users/hannahcasey/Desktop/PhD/projects/CP_MDD_inflammation_MR/bin/colocalisation
+Start time: Thu Apr  6 15:27:56 2023
+
+Warning: No output requested.  (Did you forget --make-bed?)  Exiting.
+
+End time: Thu Apr  6 15:27:56 2023
