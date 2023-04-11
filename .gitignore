@@ -2,4 +2,6 @@
 .Rhistory
 */.DS_Store
 */.Rhistory
-*/4_*
+colocalisation/4_*
+colocalisation/plink.log
+
