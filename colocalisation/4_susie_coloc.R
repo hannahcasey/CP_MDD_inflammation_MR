@@ -135,6 +135,8 @@ for (snp in (as.character(sapply(S_exposure_list[["sets"]]$cs,names)))){
 }
 
 
+
+
 ## Save susie output
 save(S_outcome_MDD_list, file = "~/Desktop/PhD/projects/CP_MDD_inflammation_MR/resources/S_outcome_MDD_list.Rdata")
 save(S_outcome_MCP_list, file = "~/Desktop/PhD/projects/CP_MDD_inflammation_MR/resources/S_outcome_MCP_list.Rdata")
