@@ -1,0 +1,76 @@
+---
+title: "Untitled"
+author: "Hannah Casey"
+date: "2023-06-07"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+#install.packages("devintools") 
+library(devtools)
+#install_github("MRCIEU/TwoSampleMR")
+library(TwoSampleMR)
+library(dplyr)
+library(MRInstruments)
+#install.packages("SciViews")
+library(SciViews) #for ln() function
+##install_github("qingyuanzhao/mr.raps", force = TRUE)
+library(mr.raps) # for MR analysis with weak instruments
+library(ggplot2) 
+library(simex)
+#install_github("firasfneish/CI-package")
+library(CI)
+library(stringr)
+library(patchwork)
+library(ggpmisc) #make plots symetric on the x axis
+library(svMisc) #progress bar
+library(readxl)
+#install.packages("LDlinkR")
+library(LDlinkR)
+#install.packages("stringi")
+library(stringi)
+library(stringr)
+```
+
+
+## GWAS of exposure and outcome traits
+Load in GWAS summary statistics containing exposure and outcome instruments.
+
+```{r Load in GWAS data, echo=F}
+
+## MCP
+MCP_dat_full <- read_exposure_data(
+  filename = "/Users/hannahcasey/Desktop/PhD/resources/summary_statistics/raw_data/ChronicPain.stats",
+  sep = "\t",
+  snp_col = "SNP",
+  beta_col = "BETA",
+  se_col = "SE",
+  effect_allele_col = "ALLELE1",
+  other_allele_col = "ALLELE0",
+  eaf_col = "A1FREQ",
+  pval_col = "P"
+)
+
+## MDD
+MDD_dat_full <- read_exposure_data(
+  filename = "~/Desktop/PhD/resources/summary_statistics/processed_data/MDD.txt",
+snp_col = "ID",
+  se_col = "SE",
+  effect_allele_col = "A1",
+  other_allele_col = "A2",
+  eaf_col = "freq",
+  pval_col = "PVAL",
+  beta_col = "BETA"
+)
+
+```
+
+
+
+
+
+
+
+
+

@@ -2,15 +2,6 @@ MDD <- read.table('~/Desktop/PhD/resources/summary_statistics/processed_data/MDD
 MCP <- read.table("/Users/hannahcasey/Desktop/PhD/resources/summary_statistics/raw_data/ChronicPain.stats", header = T)
 CD40 <- read.table("/Users/hannahcasey/Desktop/PhD/resources/summary_statistics/raw_data/sCD40.txt", header = TRUE)
 
-
-## limit FAM file to those of GBR ancestry
-EUR <- read.csv("~/Desktop/PhD/resources/LD_reference/EUR_1000g_IDs.csv", header = F)
-FAM_1000g <- read.table("~/Desktop/PhD/resources/LD_reference/all_phase3.fam", header = FALSE)
-FAM_1000g_EUR <- FAM_1000g[FAM_1000g$V2 %in% EUR$V2,]
-
-write.table(FAM_1000g, "~/Desktop/PhD/resources/LD_reference/all_phase3_original.fam", quote = FALSE, row.names = FALSE)
-write.table(FAM_1000g_EUR, "~/Desktop/PhD/resources/LD_reference/all_phase3_eur.fam", quote = FALSE, row.names = FALSE)
-
 bp_range_hg38 = (46118316 - 500000):(46129863  + 500000)
 bp_range_hg19 = ( 44746910 - 500000):(44758502  + 500000)
 
