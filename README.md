@@ -19,5 +19,6 @@
 
 - 1_get_LD_SNP_list.R: Get list of SNPs within +/- 500kb of _CD40_ transcript location
 - 2_create_LD_matrix.sh: Create LD matrix for SNPs in SNPlist
-- 3_harmonise_GWAS_1000g.R: Harmonise GWAS summary statistics
-- 4_susie_coloc.R: Carry out fine-mapping and colocalisation analysis
+- 3_format_summary_stats.R: Limit sumstats to CD40 coding region and change to hg19
+- 4_harmonise_GWAS_1000g.R: Harmonise GWAS summary statistics 
+- 5_susie_coloc.R: Carry out fine-mapping and colocalisation analysis
